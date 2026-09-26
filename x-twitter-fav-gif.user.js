@@ -1,9 +1,29 @@
 // ==UserScript==
 // @name         X/Twitter GIF Favorites
 // @namespace    https://local/twitter-gif-favorites
-// @version      1.4.0
+// @version      1.5.0
 // @description  Star GIFs on X/Twitter to save them as real, locally-stored .gif files, then repost them in one click from a button added to the tweet/reply toolbar.
 // @author       SharpeurNes
+// @match        https://x.com/*
+// @match        https://twitter.com/*
+// @icon         https://abs.twimg.com/favicons/twitter.3.ico
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
+// @grant        GM_addStyle
+// @grant        GM_registerMenuCommand
+// @connect      video.twimg.com
+// @connect      pbs.twimg.com
+// @connect      cdnjs.cloudflare.com
+// @require      https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js
+// @run-at       document-idle
+// ==/UserScript==
+// ==UserScript==
+// @name         X/Twitter GIF Favorites
+// @namespace    https://local/twitter-gif-favorites
+// @version      1.4.0
+// @description  Star GIFs on X/Twitter to save them as real, locally-stored .gif files, then repost them in one click from a button added to the tweet/reply toolbar.
+// @author       You
 // @match        https://x.com/*
 // @match        https://twitter.com/*
 // @icon         https://abs.twimg.com/favicons/twitter.3.ico
@@ -90,19 +110,19 @@
       top: 8px;
       left: 8px;
       z-index: 50;
-      width: 32px;
-      height: 32px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.35);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       border: none;
-      transition: transform 0.15s ease;
+      transition: transform 0.15s ease, background 0.15s ease;
     }
-    .tgf-star-btn:hover { transform: scale(1.12); background: rgba(0,0,0,0.8); }
-    .tgf-star-btn svg { width: 18px; height: 18px; }
+    .tgf-star-btn:hover { transform: scale(1.12); background: rgba(0,0,0,0.55); }
+    .tgf-star-btn svg { width: 13px; height: 13px; }
     .tgf-spin { animation: tgf-rotate 0.8s linear infinite; }
     @keyframes tgf-rotate { to { transform: rotate(360deg); } }
 
