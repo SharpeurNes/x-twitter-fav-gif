@@ -18,26 +18,6 @@
 // @require      https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js
 // @run-at       document-idle
 // ==/UserScript==
-// ==UserScript==
-// @name         X/Twitter GIF Favorites
-// @namespace    https://local/twitter-gif-favorites
-// @version      1.4.0
-// @description  Star GIFs on X/Twitter to save them as real, locally-stored .gif files, then repost them in one click from a button added to the tweet/reply toolbar.
-// @author       You
-// @match        https://x.com/*
-// @match        https://twitter.com/*
-// @icon         https://abs.twimg.com/favicons/twitter.3.ico
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_xmlhttpRequest
-// @grant        GM_addStyle
-// @grant        GM_registerMenuCommand
-// @connect      video.twimg.com
-// @connect      pbs.twimg.com
-// @connect      cdnjs.cloudflare.com
-// @require      https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js
-// @run-at       document-idle
-// ==/UserScript==
 
 (function () {
   'use strict';
