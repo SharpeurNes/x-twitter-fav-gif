@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         X/Twitter GIF Favoris
+// @name         X/Twitter GIF Favorites
 // @namespace    https://local/twitter-gif-favorites
-// @version      1.3.0
-// @description  Star X/Twitter GIFs: instant conversion to actual .gif format and local storage, with a button built into the composer toolbar for one-click reposting.
+// @version      1.4.0
+// @description  Star GIFs on X/Twitter to save them as real, locally-stored .gif files, then repost them in one click from a button added to the tweet/reply toolbar.
 // @author       SharpeurNes
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -26,13 +26,13 @@
   const PROCESSED_ATTR = 'data-tgf-processed';
   const GIF_WORKER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js';
 
-  // Réglages de conversion MP4 -> GIF
+  // MP4 -> GIF conversion settings
   const GIF_MAX_FRAMES = 90;
   const GIF_MAX_WIDTH = 480;
   const GIF_FPS = 12;
-  const GIF_MAX_DURATION = 15; // secondes, sécurité
+  const GIF_MAX_DURATION = 15; // seconds, safety cap
 
-  // ---------- Stockage ----------
+  // ---------- Storage ----------
   function getFavorites() {
     try {
       return JSON.parse(GM_getValue(STORAGE_KEY, '[]'));
@@ -56,7 +56,7 @@
     saveFavorites(getFavorites().filter((f) => f.videoUrl !== videoUrl));
   }
 
-  // ---------- Thème (clair/sombre/dim) détecté à la volée ----------
+  // ---------- Theme (light/dark/dim) detected on the fly ----------
   function applyTheme() {
     const bg = getComputedStyle(document.body).backgroundColor;
     const nums = bg.match(/\d+/g);
@@ -211,7 +211,7 @@
     toastEl._t = setTimeout(() => toastEl.classList.remove('tgf-show'), duration);
   }
 
-  // ---------- Icônes ----------
+  // ---------- Icons ----------
   const STAR_OUTLINE =
     '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9L5.7 21l1.7-7L2 9.2l7.1-.6z"/></svg>';
   const STAR_FILLED =
@@ -219,7 +219,7 @@
   const STAR_LOADING =
     '<svg class="tgf-spin" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9"/></svg>';
 
-  // ---------- Utilitaires réseau / fichiers ----------
+  // ---------- Network / file utilities ----------
   function fetchAsArrayBuffer(url) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
@@ -239,8 +239,8 @@
       reader.readAsDataURL(blob);
     });
   }
-  // X bloque fetch() sur les URL data: via sa Content-Security-Policy (connect-src).
-  // On décode donc le base64 à la main : aucune requête réseau, donc aucun souci de CSP.
+  // X blocks fetch() on data: URLs via its Content-Security-Policy (connect-src).
+  // So we decode the base64 by hand: no network request, so no CSP issue.
   function dataUrlToBlob(dataUrl) {
     const commaIdx = dataUrl.indexOf(',');
     const header = dataUrl.slice(0, commaIdx);
@@ -255,7 +255,7 @@
     return new Blob([bytes], { type: mime });
   }
 
-  // ---------- Détection des GIFs & injection de l'étoile ----------
+  // ---------- GIF detection & star button injection ----------
   function extractVideoUrl(video) {
     return video.currentSrc || video.src || (video.querySelector('source') || {}).src || '';
   }
@@ -284,7 +284,7 @@
   }
 
   function injectStar(video) {
-    // Ignore tout ce que le script a lui-même créé (aperçus, vidéo de conversion cachée)
+    // Ignore anything the script created itself (previews, hidden conversion video)
     if (video.hasAttribute('data-tgf-own') || video.closest('.tgf-panel')) return;
     if (video.hasAttribute(PROCESSED_ATTR)) return;
     if (!isGifVideo(video)) return;
@@ -311,13 +311,13 @@
       e.stopPropagation();
       const url = extractVideoUrl(video);
       if (!url) {
-        toast('GIF pas encore chargé, laisse-le jouer une seconde puis réessaie ⭐');
+        toast('GIF not loaded yet — let it play for a second, then try again ⭐');
         return;
       }
 
       if (isFavorited(url)) {
         removeFavorite(url);
-        toast('GIF retiré des favoris et supprimé du stockage local');
+        toast('GIF removed from favorites and deleted from local storage');
         refreshIcon();
         renderPanel();
         return;
@@ -326,12 +326,12 @@
       if (btn.dataset.busy === '1') return;
       btn.dataset.busy = '1';
       btn.innerHTML = STAR_LOADING;
-      toast('Conversion en GIF...', 60000);
+      toast('Converting to GIF...', 60000);
       try {
         const buffer = await fetchAsArrayBuffer(url);
         const mp4Blob = new Blob([buffer], { type: 'video/mp4' });
         const gifBlob = await convertMp4BlobToGif(mp4Blob, (p) => {
-          toast(`Conversion en GIF... ${Math.round(Math.min(p, 1) * 100)}%`, 60000);
+          toast(`Converting to GIF... ${Math.round(Math.min(p, 1) * 100)}%`, 60000);
         });
         const gifDataUrl = await blobToDataUrl(gifBlob);
         const article = video.closest('article');
@@ -342,11 +342,11 @@
           tweetUrl: article ? getTweetUrl(article) : '',
           addedAt: Date.now(),
         });
-        toast('GIF converti et enregistré en favoris ⭐');
+        toast('GIF converted and saved to favorites ⭐');
         renderPanel();
       } catch (err) {
         console.error('[TGF]', err);
-        toast('Conversion impossible pour ce GIF');
+        toast("Couldn't convert this GIF");
       } finally {
         btn.dataset.busy = '';
         refreshIcon();
@@ -360,7 +360,7 @@
     root.querySelectorAll('video').forEach(injectStar);
   }
 
-  // ---------- Repérer la zone de rédaction active (repli) ----------
+  // ---------- Track the active compose box (fallback) ----------
   let lastComposer = null;
   let activeFileInput = null;
   document.addEventListener(
@@ -369,8 +369,8 @@
       const box = e.target.closest('[data-testid^="tweetTextarea"], div[role="textbox"]');
       if (box) {
         lastComposer = box;
-        // La barre d'outils (média/GIF/emoji...) se monte souvent au moment du focus :
-        // on relance un scan juste après pour l'attraper dès qu'elle apparaît.
+        // The toolbar (media/GIF/emoji...) is often mounted right when the box gets focus,
+        // so we re-scan shortly after to catch it as soon as it appears.
         setTimeout(() => scanForToolbars(document), 250);
         setTimeout(() => scanForToolbars(document), 800);
       }
@@ -398,16 +398,16 @@
     );
   }
 
-  // ---------- Bouton intégré à la barre d'outils du compositeur ----------
+  // ---------- Button embedded in the composer toolbar ----------
   function injectToolbarButton(toolbar) {
     if (toolbar.hasAttribute('data-tgf-toolbar-done')) return;
 
-    // Le bouton "Contenu sensible" (le drapeau, dernier de la rangée) sert de repère
-    // et de modèle : notre étoile s'insère ainsi tout à la fin de la barre d'icônes.
+    // The "Content disclosure" button (the flag, last in the row) is used as the
+    // anchor and template, so our star is inserted at the very end of the icon row.
     const anchorButton =
       toolbar.querySelector('[data-testid="contentDisclosureButton"]') ||
       toolbar.querySelector('[data-testid="gifSearchButton"]');
-    if (!anchorButton) return; // pas encore monté, on retentera au prochain scan
+    if (!anchorButton) return; // not mounted yet, we'll retry on the next scan
 
     toolbar.setAttribute('data-tgf-toolbar-done', '1');
 
@@ -417,13 +417,13 @@
     const clonedButton = clonedSlide.querySelector('[role="button"]') || clonedSlide;
     clonedButton.classList.add('tgf-toolbar-btn');
     clonedButton.removeAttribute('data-testid');
-    clonedButton.setAttribute('aria-label', 'Mes GIFs favoris');
-    clonedButton.title = 'Mes GIFs favoris';
+    clonedButton.setAttribute('aria-label', 'My favorite GIFs');
+    clonedButton.title = 'My favorite GIFs';
 
     const svg = clonedButton.querySelector('svg');
     if (svg) {
-      // fill="currentColor" : reprend exactement la même teinte grise que les autres
-      // icônes (au lieu d'un jaune vif qui attire trop l'œil), tout en restant repérable.
+      // fill="currentColor": matches the exact same gray tone as the other icons
+      // (instead of a bright yellow that stands out too much), while staying recognizable.
       svg.innerHTML = '<path fill="currentColor" d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9L5.7 21l1.7-7L2 9.2l7.1-.6z"/>';
     }
 
@@ -431,6 +431,7 @@
       e.preventDefault();
       e.stopPropagation();
       activeFileInput = toolbar.querySelector('input[type="file"]');
+      currentAnchor = toolbar;
       positionPanelNear(toolbar);
       panelEl.classList.add('tgf-open');
       renderPanel();
@@ -448,13 +449,15 @@
       const before = toolbar.hasAttribute('data-tgf-toolbar-done');
       injectToolbarButton(toolbar);
       if (!before && toolbar.hasAttribute('data-tgf-toolbar-done')) {
-        console.log('[TGF] Bouton favoris ajouté à une barre d\'outils :', toolbar);
+        console.log('[TGF] Favorite button added to a toolbar:', toolbar);
       }
     });
   }
 
-  // Positionne le panneau juste au-dessus de la barre d'outils, aligné à gauche,
-  // comme le fait le picker d'emoji natif de X (au lieu d'un point fixe sur la page).
+  // Positions the panel just above the toolbar, left-aligned, like X's native
+  // emoji picker does (instead of a fixed spot on the page). Keeps track of the
+  // anchor element so the panel can be repositioned again on scroll (see below).
+  let currentAnchor = null;
   function positionPanelNear(anchorEl) {
     const rect = anchorEl.getBoundingClientRect();
     const width = 320;
@@ -467,6 +470,24 @@
     panelEl.style.bottom = window.innerHeight - rect.top + 8 + 'px';
   }
 
+  // Keep the open panel glued to its anchor toolbar while the page (or the
+  // reply/tweet modal, or the timeline) scrolls. `scroll` doesn't bubble, so the
+  // listener is registered on the capture phase to catch it from any container.
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (!panelEl || !panelEl.classList.contains('tgf-open')) return;
+      if (!currentAnchor || !document.contains(currentAnchor)) return;
+      positionPanelNear(currentAnchor);
+    },
+    true
+  );
+  window.addEventListener('resize', () => {
+    if (!panelEl || !panelEl.classList.contains('tgf-open')) return;
+    if (!currentAnchor || !document.contains(currentAnchor)) return;
+    positionPanelNear(currentAnchor);
+  });
+
   function attachFileToComposer(input, file) {
     const dt = new DataTransfer();
     dt.items.add(file);
@@ -478,21 +499,21 @@
   async function insertFavorite(item) {
     const input = findFileInput();
     if (!input) {
-      toast("Ouvre d'abord une zone de rédaction (tweet ou réponse) 📝");
+      toast('Open a tweet or reply box first 📝');
       return;
     }
     try {
       const blob = dataUrlToBlob(item.gifDataUrl);
       const file = new File([blob], `gif-${Date.now()}.gif`, { type: 'image/gif' });
       attachFileToComposer(input, file);
-      toast('GIF ajouté au tweet ✅');
+      toast('GIF added to the tweet ✅');
     } catch (err) {
       console.error('[TGF]', err);
-      toast("Erreur lors de l'insertion du GIF");
+      toast('Error inserting the GIF');
     }
   }
 
-  // ---------- Conversion MP4 -> vrai GIF animé ----------
+  // ---------- MP4 -> real animated GIF conversion ----------
   let workerBlobUrlPromise = null;
   function getWorkerBlobUrl() {
     if (!workerBlobUrlPromise) {
@@ -526,7 +547,7 @@
     const workerScript = await getWorkerBlobUrl();
     const videoUrl = URL.createObjectURL(mp4Blob);
     const video = document.createElement('video');
-    video.dataset.tgfOwn = '1'; // exclu du scan des GIFs
+    video.dataset.tgfOwn = '1'; // excluded from the GIF scan
     video.src = videoUrl;
     video.muted = true;
     video.playsInline = true;
@@ -588,7 +609,7 @@
     }
   }
 
-  // ---------- Panneau des favoris ----------
+  // ---------- Favorites panel ----------
   let panelEl, gridEl;
 
   function buildPanel() {
@@ -596,10 +617,10 @@
     panelEl.className = 'tgf-panel';
     panelEl.innerHTML = `
       <div class="tgf-panel-header">
-        <strong>⭐ Mes GIFs</strong>
+        <strong>⭐ My GIFs</strong>
         <span class="tgf-count"></span>
-        <button type="button" class="tgf-clear">Tout effacer</button>
-        <button type="button" class="tgf-close" title="Fermer">✕</button>
+        <button type="button" class="tgf-clear">Clear all</button>
+        <button type="button" class="tgf-close" title="Close">✕</button>
       </div>
       <div class="tgf-grid"></div>
     `;
@@ -611,13 +632,13 @@
     });
 
     panelEl.querySelector('.tgf-clear').addEventListener('click', () => {
-      if (confirm('Supprimer tous les GIFs favoris (et les fichiers stockés localement) ?')) {
+      if (confirm('Delete all favorite GIFs (and their locally stored files)?')) {
         saveFavorites([]);
         renderPanel();
       }
     });
 
-    // Ferme le panneau si on clique en dehors (et en dehors du bouton qui l'ouvre)
+    // Close the panel when clicking outside it (and outside the button that opens it)
     document.addEventListener('click', (e) => {
       if (!panelEl.classList.contains('tgf-open')) return;
       if (panelEl.contains(e.target)) return;
@@ -632,20 +653,20 @@
     const countEl = panelEl.querySelector('.tgf-count');
     if (countEl) {
       const totalMb = favorites.reduce((s, f) => s + (f.sizeBytes || 0), 0) / (1024 * 1024);
-      countEl.textContent = favorites.length ? `${favorites.length} · ${totalMb.toFixed(1)} Mo` : '';
+      countEl.textContent = favorites.length ? `${favorites.length} · ${totalMb.toFixed(1)} MB` : '';
     }
     gridEl.innerHTML = '';
     if (favorites.length === 0) {
       gridEl.innerHTML =
-        '<div class="tgf-empty">Aucun GIF favori pour l\'instant.<br>Clique sur l\'étoile ⭐ sur un GIF pour le convertir et l\'ajouter.</div>';
+        '<div class="tgf-empty">No favorite GIFs yet.<br>Click the star ⭐ on a GIF to convert and save it.</div>';
       return;
     }
     favorites.forEach((item) => {
       const el = document.createElement('div');
       el.className = 'tgf-item';
       el.innerHTML = `
-        <img src="${item.gifDataUrl}" data-tgf-own="1" alt="GIF favori">
-        <button type="button" class="tgf-del" title="Retirer">×</button>
+        <img src="${item.gifDataUrl}" data-tgf-own="1" alt="Favorite GIF">
+        <button type="button" class="tgf-del" title="Remove">×</button>
       `;
       el.addEventListener('click', (e) => {
         if (e.target.classList.contains('tgf-del')) return;
@@ -660,7 +681,7 @@
     });
   }
 
-  // ---------- Démarrage ----------
+  // ---------- Startup ----------
   function init() {
     applyTheme();
     new MutationObserver(applyTheme).observe(document.body, {
@@ -682,7 +703,7 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    GM_registerMenuCommand('Voir mes GIFs favoris', () => {
+    GM_registerMenuCommand('View my favorite GIFs', () => {
       panelEl.classList.add('tgf-open');
       renderPanel();
     });
