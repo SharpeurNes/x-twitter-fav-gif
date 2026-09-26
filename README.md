@@ -4,6 +4,9 @@ A Tampermonkey userscript that lets you save GIFs you find on X (Twitter) and re
 
 Download: https://github.com/SharpeurNes/x-twitter-fav-gif/raw/refs/heads/main/x-twitter-fav-gif.user.js
 
+## Preview
+<p align="center"><img width="350" height="450" alt="image" src="https://github.com/user-attachments/assets/a02c82a2-3382-467c-b4d5-750775895ebe" /></p>
+
 ## What it does
 
 1. **Star a GIF** — A small star button appears on top of every GIF in your timeline. Click it to save that GIF.
@@ -14,9 +17,7 @@ Download: https://github.com/SharpeurNes/x-twitter-fav-gif/raw/refs/heads/main/x
 ## Installation
 
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension.
-2. Open Tampermonkey's dashboard → **Create a new script**.
-3. Delete the placeholder code and paste in the contents of `x-gif-favoris.user.js`.
-4. Save (Ctrl+S). Reload x.com.
+2. Open this link and install the script https://github.com/SharpeurNes/x-twitter-fav-gif/raw/refs/heads/main/x-twitter-fav-gif.user.js
 
 ## How to use it
 
