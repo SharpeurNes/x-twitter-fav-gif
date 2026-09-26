@@ -2,6 +2,8 @@
 
 A Tampermonkey userscript that lets you save GIFs you find on X (Twitter) and repost them later with one click.
 
+Download: https://github.com/SharpeurNes/x-twitter-fav-gif/raw/refs/heads/main/x-twitter-fav-gif.user.js
+
 ## What it does
 
 1. **Star a GIF** — A small star button appears on top of every GIF in your timeline. Click it to save that GIF.
