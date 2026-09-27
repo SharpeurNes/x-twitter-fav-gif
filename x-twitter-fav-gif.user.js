@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         X/Twitter GIF Favorites
 // @namespace    https://local/twitter-gif-favorites
-// @version      1.5.0
+// @version      1.6.3
 // @description  Star GIFs on X/Twitter to save them as real, locally-stored .gif files, then repost them in one click from a button added to the tweet/reply toolbar.
 // @author       SharpeurNes
 // @match        https://x.com/*
@@ -151,8 +151,10 @@
       padding: 10px;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
+      gap: 5px !important;
       overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .tgf-empty {
       grid-column: 1 / -1;
@@ -168,6 +170,7 @@
       background: #000;
       aspect-ratio: 1 / 1;
       cursor: pointer;
+      border: 2px solid rgba(0,0,0,0.55);
     }
     .tgf-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tgf-item .tgf-del {
@@ -255,6 +258,40 @@
     return new Blob([bytes], { type: mime });
   }
 
+  // For favorites saved before the hover-to-play feature existed (no stored
+  // poster yet): decode the very first frame of the already-saved GIF into a
+  // static image, so we can still avoid animating it until it's hovered.
+  function generatePosterFromGif(gifDataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.dataset.tgfOwn = '1';
+      img.style.position = 'fixed';
+      img.style.left = '-9999px';
+      img.style.width = '1px';
+      img.style.height = '1px';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 160;
+          canvas.height = img.naturalHeight || 160;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.72));
+        } catch (err) {
+          reject(err);
+        } finally {
+          img.remove();
+        }
+      };
+      img.onerror = () => {
+        img.remove();
+        reject(new Error('poster generation failed'));
+      };
+      document.body.appendChild(img);
+      img.src = gifDataUrl;
+    });
+  }
+  const posterGenerationInFlight = new Set();
+
   // ---------- GIF detection & star button injection ----------
   function extractVideoUrl(video) {
     return video.currentSrc || video.src || (video.querySelector('source') || {}).src || '';
@@ -330,7 +367,7 @@
       try {
         const buffer = await fetchAsArrayBuffer(url);
         const mp4Blob = new Blob([buffer], { type: 'video/mp4' });
-        const gifBlob = await convertMp4BlobToGif(mp4Blob, (p) => {
+        const { blob: gifBlob, poster: posterUrl } = await convertMp4BlobToGif(mp4Blob, (p) => {
           toast(`Converting to GIF... ${Math.round(Math.min(p, 1) * 100)}%`, 60000);
         });
         const gifDataUrl = await blobToDataUrl(gifBlob);
@@ -338,6 +375,7 @@
         addFavorite({
           videoUrl: url,
           gifDataUrl,
+          posterUrl,
           sizeBytes: gifBlob.size,
           tweetUrl: article ? getTweetUrl(article) : '',
           addedAt: Date.now(),
@@ -454,37 +492,64 @@
     });
   }
 
-  // Positions the panel just above the toolbar, left-aligned, like X's native
-  // emoji picker does (instead of a fixed spot on the page). Keeps track of the
-  // anchor element so the panel can be repositioned again on scroll (see below).
+  // Positions the panel next to the toolbar, left-aligned, like X's native emoji
+  // picker does. It opens upward when there's enough room above the toolbar, or
+  // downward otherwise (e.g. the home page composer sits near the top of the
+  // screen), and its height is clamped to whatever space is actually available
+  // so it always stays fully on-screen (the grid inside then scrolls normally).
   let currentAnchor = null;
   function positionPanelNear(anchorEl) {
     const rect = anchorEl.getBoundingClientRect();
     const width = 320;
+    const margin = 8;
+    const maxPanelHeight = 480;
+
     let left = rect.left;
-    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
+    if (left < margin) left = margin;
     panelEl.style.left = left + 'px';
     panelEl.style.right = 'auto';
-    panelEl.style.top = 'auto';
-    panelEl.style.bottom = window.innerHeight - rect.top + 8 + 'px';
+
+    const spaceAbove = rect.top - margin;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+
+    if (spaceAbove >= 200 || spaceAbove >= spaceBelow) {
+      panelEl.style.top = 'auto';
+      panelEl.style.bottom = window.innerHeight - rect.top + margin + 'px';
+      panelEl.style.maxHeight = Math.max(150, Math.min(maxPanelHeight, spaceAbove)) + 'px';
+    } else {
+      panelEl.style.bottom = 'auto';
+      panelEl.style.top = rect.bottom + margin + 'px';
+      panelEl.style.maxHeight = Math.max(150, Math.min(maxPanelHeight, spaceBelow)) + 'px';
+    }
   }
 
   // Keep the open panel glued to its anchor toolbar while the page (or the
   // reply/tweet modal, or the timeline) scrolls. `scroll` doesn't bubble, so the
   // listener is registered on the capture phase to catch it from any container.
+  // If the anchor has been removed from the page (e.g. X swapped the view via
+  // client-side navigation, without a real page reload), close the panel
+  // instead of leaving it stranded on screen.
   window.addEventListener(
     'scroll',
     () => {
       if (!panelEl || !panelEl.classList.contains('tgf-open')) return;
-      if (!currentAnchor || !document.contains(currentAnchor)) return;
+      if (!currentAnchor || !document.contains(currentAnchor)) {
+        panelEl.classList.remove('tgf-open');
+        currentAnchor = null;
+        return;
+      }
       positionPanelNear(currentAnchor);
     },
     true
   );
   window.addEventListener('resize', () => {
     if (!panelEl || !panelEl.classList.contains('tgf-open')) return;
-    if (!currentAnchor || !document.contains(currentAnchor)) return;
+    if (!currentAnchor || !document.contains(currentAnchor)) {
+      panelEl.classList.remove('tgf-open');
+      currentAnchor = null;
+      return;
+    }
     positionPanelNear(currentAnchor);
   });
 
@@ -507,6 +572,7 @@
       const file = new File([blob], `gif-${Date.now()}.gif`, { type: 'image/gif' });
       attachFileToComposer(input, file);
       toast('GIF added to the tweet ✅');
+      if (panelEl) panelEl.classList.remove('tgf-open');
     } catch (err) {
       console.error('[TGF]', err);
       toast('Error inserting the GIF');
@@ -584,10 +650,16 @@
 
       const gif = new GIF({ workers: 2, quality: 10, width, height, workerScript });
 
+      let posterDataUrl = null;
       for (let i = 0; i < frameCount; i++) {
         const t = Math.min(duration - 0.02, i / fps);
         await seekTo(video, t);
         ctx.drawImage(video, 0, 0, width, height);
+        if (i === 0) {
+          // Static snapshot of the first frame, used as a lightweight non-animated
+          // thumbnail in the favorites panel (see renderPanel / hover-to-play below).
+          posterDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        }
         gif.addFrame(ctx, { copy: true, delay: Math.round(1000 / fps) });
         if (onProgress) onProgress(0.1 + (i / frameCount) * 0.5);
       }
@@ -602,7 +674,7 @@
         }
       });
 
-      return resultBlob;
+      return { blob: resultBlob, poster: posterDataUrl };
     } finally {
       video.remove();
       URL.revokeObjectURL(videoUrl);
@@ -664,10 +736,45 @@
     favorites.forEach((item) => {
       const el = document.createElement('div');
       el.className = 'tgf-item';
+      const staticSrc = item.posterUrl || item.gifDataUrl;
       el.innerHTML = `
-        <img src="${item.gifDataUrl}" data-tgf-own="1" alt="Favorite GIF">
+        <img src="${staticSrc}" data-tgf-own="1" alt="Favorite GIF">
         <button type="button" class="tgf-del" title="Remove">×</button>
       `;
+      const img = el.querySelector('img');
+
+      const enableHoverPlay = (posterUrl) => {
+        el.addEventListener('mouseenter', () => {
+          img.src = item.gifDataUrl;
+        });
+        el.addEventListener('mouseleave', () => {
+          img.src = posterUrl;
+        });
+      };
+
+      if (item.posterUrl) {
+        enableHoverPlay(item.posterUrl);
+      } else if (!posterGenerationInFlight.has(item.videoUrl)) {
+        // Older favorite saved before hover-to-play existed: generate a poster
+        // now, cache it to storage, and stop it from animating continuously.
+        posterGenerationInFlight.add(item.videoUrl);
+        generatePosterFromGif(item.gifDataUrl)
+          .then((posterUrl) => {
+            const list = getFavorites();
+            const match = list.find((f) => f.videoUrl === item.videoUrl);
+            if (match) {
+              match.posterUrl = posterUrl;
+              saveFavorites(list);
+            }
+            img.src = posterUrl;
+            enableHoverPlay(posterUrl);
+          })
+          .catch(() => {
+            // If generation fails, leave it playing continuously (no worse than before).
+          })
+          .finally(() => posterGenerationInFlight.delete(item.videoUrl));
+      }
+
       el.addEventListener('click', (e) => {
         if (e.target.classList.contains('tgf-del')) return;
         insertFavorite(item);
@@ -699,6 +806,15 @@
       debounce = setTimeout(() => {
         scanForGifs(document);
         scanForToolbars(document);
+        if (
+          panelEl &&
+          panelEl.classList.contains('tgf-open') &&
+          currentAnchor &&
+          !document.contains(currentAnchor)
+        ) {
+          panelEl.classList.remove('tgf-open');
+          currentAnchor = null;
+        }
       }, 300);
     });
     observer.observe(document.body, { childList: true, subtree: true });
