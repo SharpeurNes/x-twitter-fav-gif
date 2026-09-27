@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         X/Twitter GIF Favorites
 // @namespace    https://local/twitter-gif-favorites
-// @version      1.6.3
+// @version      1.7.0
 // @description  Star GIFs on X/Twitter to save them as real, locally-stored .gif files, then repost them in one click from a button added to the tweet/reply toolbar.
 // @author       SharpeurNes
 // @match        https://x.com/*
@@ -175,10 +175,17 @@
     .tgf-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tgf-item .tgf-del {
       position: absolute; top: 2px; right: 2px;
-      width: 20px; height: 20px; border-radius: 50%;
-      background: rgba(0,0,0,0.7); color: white;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); color: white;
       display: flex; align-items: center; justify-content: center;
       font-size: 12px; border: none; cursor: pointer; z-index: 5;
+    }
+    .tgf-item .tgf-dl {
+      position: absolute; top: 2px; left: 2px;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; border: none; cursor: pointer; z-index: 5;
     }
     .tgf-toast {
       position: fixed;
@@ -291,6 +298,20 @@
     });
   }
   const posterGenerationInFlight = new Set();
+
+  // Saves a single favorite as a real .gif file in the browser's normal
+  // Downloads folder, so it can be found with a regular file explorer.
+  function downloadFavoriteFile(item, index) {
+    const blob = dataUrlToBlob(item.gifDataUrl);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `favorite-gif-${index + 1}.gif`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
 
   // ---------- GIF detection & star button injection ----------
   function extractVideoUrl(video) {
@@ -733,13 +754,14 @@
         '<div class="tgf-empty">No favorite GIFs yet.<br>Click the star ⭐ on a GIF to convert and save it.</div>';
       return;
     }
-    favorites.forEach((item) => {
+    favorites.forEach((item, index) => {
       const el = document.createElement('div');
       el.className = 'tgf-item';
       const staticSrc = item.posterUrl || item.gifDataUrl;
       el.innerHTML = `
         <img src="${staticSrc}" data-tgf-own="1" alt="Favorite GIF">
         <button type="button" class="tgf-del" title="Remove">×</button>
+        <button type="button" class="tgf-dl" title="Download as .gif file">⬇</button>
       `;
       const img = el.querySelector('img');
 
@@ -783,6 +805,11 @@
         e.stopPropagation();
         removeFavorite(item.videoUrl);
         renderPanel();
+      });
+      el.querySelector('.tgf-dl').addEventListener('click', (e) => {
+        e.stopPropagation();
+        downloadFavoriteFile(item, index);
+        toast('Downloading .gif file...');
       });
       gridEl.appendChild(el);
     });
