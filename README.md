@@ -5,7 +5,7 @@ A Tampermonkey userscript that lets you save GIFs you find on X (Twitter) and re
 Download: https://github.com/SharpeurNes/x-twitter-fav-gif/raw/refs/heads/main/x-twitter-fav-gif.user.js
 
 ## Preview
-<p align="center"><img width="350" height="450" alt="image" src="https://github.com/user-attachments/assets/a02c82a2-3382-467c-b4d5-750775895ebe" /></p>
+<p align="center"><img width="350" height="450" alt="image" src="https://github.com/user-attachments/assets/f17dce7e-037e-471b-af75-561467859f29" /></p>
 
 ## What it does
 
